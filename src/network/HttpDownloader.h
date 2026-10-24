@@ -39,6 +39,7 @@ class HttpDownloader {
    */
   static bool fetchUrl(const std::string& url, std::string& outContent, const std::string& username = "",
                        const std::string& password = "");
+  static bool fetchUrl(const std::string& url, std::string& outContent, const Headers& headers);
 
   static bool fetchUrl(const std::string& url, Stream& stream, const std::string& username = "",
                        const std::string& password = "");

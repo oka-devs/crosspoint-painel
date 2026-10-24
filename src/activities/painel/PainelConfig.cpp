@@ -70,7 +70,6 @@ bool PainelConfig::carregar() {
       }
     }
   }
-  if (paginas.empty()) paginas = {"hoje", "parque"};
   if (!valida()) LOG_ERR("PNL", "%s sem url ou token", ARQUIVO);
   return valida();
 }

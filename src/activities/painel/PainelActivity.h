@@ -4,6 +4,7 @@
 
 #include "PainelConfig.h"
 #include "activities/Activity.h"
+#include "network/HttpDownloader.h"
 
 enum class PainelState {
   SEM_CONFIG,  // não há /painel.txt válido no cartão
@@ -48,6 +49,8 @@ class PainelActivity final : public Activity {
   void onWifiPronto(bool conectado);
   void baixarAgora();
   bool baixarPagina(const std::string& pagina);
+  bool lerCatalogo();
+  HttpDownloader::Headers cabecalhos() const;
   void acao(const char* tecla);
   bool baixarPara(const std::string& url, const std::string& pagina);
   int paginasGuardadas() const;

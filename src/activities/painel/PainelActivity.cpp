@@ -139,14 +139,40 @@ bool PainelActivity::baixarPagina(const std::string& pagina) {
   return baixarPara(config.url + "/xteink/tela?pagina=" + pagina + "&formato=bmp", pagina);
 }
 
-bool PainelActivity::baixarPara(const std::string& url, const std::string& pagina) {
-  const std::string destino = caminho(pagina);
-  const std::string temporario = destino + ".tmp";
+HttpDownloader::Headers PainelActivity::cabecalhos() const {
   HttpDownloader::Headers headers = {{"Authorization", "Bearer " + config.token}};
   if (!config.cfId.empty() && !config.cfSecret.empty()) {
     headers.emplace_back("CF-Access-Client-Id", config.cfId);
     headers.emplace_back("CF-Access-Client-Secret", config.cfSecret);
   }
+  return headers;
+}
+
+// GET /xteink/paginas e colhe os "id" na ordem; o JSON é pequeno (< 300 bytes) e plano, então uma
+// varredura de texto basta e dispensa um parser.
+bool PainelActivity::lerCatalogo() {
+  std::string corpo;
+  if (!HttpDownloader::fetchUrl(config.url + "/xteink/paginas", corpo, cabecalhos())) return false;
+  std::vector<std::string> ids;
+  ids.reserve(6);
+  size_t pos = 0;
+  while ((pos = corpo.find("\"id\":\"", pos)) != std::string::npos) {
+    pos += 6;
+    const auto fim = corpo.find('"', pos);
+    if (fim == std::string::npos) break;
+    ids.push_back(corpo.substr(pos, fim - pos));
+    pos = fim + 1;
+  }
+  if (ids.empty()) return false;
+  config.paginas = std::move(ids);
+  LOG_DBG("PNL", "catalogo: %u paginas", static_cast<unsigned>(config.paginas.size()));
+  return true;
+}
+
+bool PainelActivity::baixarPara(const std::string& url, const std::string& pagina) {
+  const std::string destino = caminho(pagina);
+  const std::string temporario = destino + ".tmp";
+  const HttpDownloader::Headers headers = cabecalhos();
   // Baixa num .tmp para a página anterior sobreviver a uma queda de rede no meio.
   const auto resultado = HttpDownloader::downloadToFile(url, temporario, headers);
   if (resultado != HttpDownloader::OK) {
@@ -168,6 +194,9 @@ void PainelActivity::baixarAgora() {
       ESP.getMaxAllocHeap() < HttpDownloader::MIN_TLS_MAX_ALLOC) {
     LOG_ERR("PNL", "heap baixo para TLS (%u livre, %u maior bloco)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   } else {
+    if (config.paginasDoServidor() && !lerCatalogo()) {
+      LOG_ERR("PNL", "sem catalogo do servidor; tentando o que ha no cartao");
+    }
     for (const auto& pagina : config.paginas) {
       if (baixarPagina(pagina)) ++ok;
     }

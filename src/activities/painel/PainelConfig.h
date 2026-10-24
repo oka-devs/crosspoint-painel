@@ -11,7 +11,7 @@
  *   token=<ANYROUTE_TOKEN_XTEINK>
  *   cf_id=<CF-Access-Client-Id>          (opcional: só quando o endereço está atrás do Cloudflare Access)
  *   cf_secret=<CF-Access-Client-Secret>
- *   paginas=hoje,parque                  (ordem das páginas; padrão hoje,parque)
+ *   paginas=hoje,bicho,parque            (opcional: sem a linha, o aparelho pergunta ao servidor)
  *   descanso=hoje                        (página copiada para /sleep.bmp; vazio desliga)
  *   abrir_ao_ligar=1                     (ligar o aparelho já abre o Painel em vez da tela inicial)
  *
@@ -31,7 +31,8 @@ struct PainelConfig {
 
   // Lê o arquivo. Falso quando não existe ou não tem url e token.
   bool carregar();
-  bool valida() const { return !url.empty() && !token.empty() && !paginas.empty(); }
+  bool valida() const { return !url.empty() && !token.empty(); }
+  bool paginasDoServidor() const { return paginas.empty(); }
 
   // Só a pergunta do boot, sem guardar o resto.
   static bool abrirAoLigarConfigurado();
