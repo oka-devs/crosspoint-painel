@@ -29,8 +29,14 @@ bool wifiConectado() { return WiFi.status() == WL_CONNECTED && WiFi.localIP() !=
 void PainelActivity::onEnter() {
   Activity::onEnter();
   paginaAtual = 0;
-  if (!config.carregar()) {
+  if (!Storage.exists(PainelConfig::ARQUIVO)) {
     state = PainelState::SEM_CONFIG;
+    requestUpdate();
+    return;
+  }
+  if (!config.carregar()) {
+    state = PainelState::ERRO;
+    erro = tr(STR_PAINEL_CONFIG_INVALIDA);
     requestUpdate();
     return;
   }
