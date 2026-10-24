@@ -22,6 +22,7 @@
 #include "library/LibraryListActivity.h"
 #include "network/CrossPointWebServerActivity.h"
 #include "network/UsbDriveActivity.h"
+#include "painel/PainelActivity.h"
 #include "reader/ReaderActivity.h"
 #include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
@@ -275,6 +276,10 @@ void ActivityManager::goToLibrary() {
     return;
   }
   replaceActivity(std::move(activity));
+}
+
+void ActivityManager::goToPainel() {
+  replaceActivity(std::make_unique<PainelActivity>(renderer, mappedInput));
 }
 
 void ActivityManager::goToBrowser() {

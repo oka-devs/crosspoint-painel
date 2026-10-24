@@ -3,6 +3,8 @@
 
 #include <functional>
 #include <string>
+#include <utility>
+#include <vector>
 
 /**
  * HTTP client utility for fetching content and downloading files. Built on
@@ -15,6 +17,8 @@ class HttpDownloader {
   // Called with each body chunk as it arrives; return false to abort. Lets a
   // streaming parser consume the response without buffering the whole body.
   using DataCallback = std::function<bool(const uint8_t* data, size_t len)>;
+  // Extra request headers (name, value), e.g. a Bearer token or Cloudflare Access service-token headers.
+  using Headers = std::vector<std::pair<std::string, std::string>>;
 
   enum DownloadError {
     OK = 0,
@@ -56,4 +60,10 @@ class HttpDownloader {
                                       ProgressCallback progress = nullptr, bool* cancelFlag = nullptr,
                                       const std::string& username = "", const std::string& password = "",
                                       bool downgradeRedirectsToHttp = false);
+
+  /**
+   * Same as above, but with arbitrary request headers instead of Basic auth.
+   */
+  static DownloadError downloadToFile(const std::string& url, const std::string& destPath, const Headers& headers,
+                                      ProgressCallback progress = nullptr, bool* cancelFlag = nullptr);
 };
