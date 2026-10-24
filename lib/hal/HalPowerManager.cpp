@@ -133,6 +133,35 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
   freeink::PowerManager::deepSleepUntilPowerButton();
 }
 
+void HalPowerManager::startTimedDeepSleep(HalGPIO& gpio, const uint32_t seconds) const {
+#ifdef ENABLE_SERIAL_LOG
+  logSerial.end();
+#endif
+#if !SOC_PM_SUPPORT_EXT1_WAKEUP
+  if (gpio.isXteinkDevice()) {
+    // Opposite of startDeepSleep(): keep the battery MOSFET on (GPIO13 HIGH, held) so the RTC timer can
+    // wake the chip. The power button still wakes it.
+    gpio_hold_dis(XTEINK_C3_GPIO13);
+    gpio_set_direction(XTEINK_C3_GPIO13, GPIO_MODE_OUTPUT);
+    gpio_set_level(XTEINK_C3_GPIO13, 1);
+    gpio_hold_en(XTEINK_C3_GPIO13);
+  }
+#endif
+  for (const int8_t pin : {BoardConfig::ACTIVE.power.latch0, BoardConfig::ACTIVE.power.latch1}) {
+    if (pin < 0 || static_cast<gpio_num_t>(pin) == XTEINK_C3_GPIO13) continue;
+    const auto g = static_cast<gpio_num_t>(pin);
+    gpio_hold_dis(g);
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, HIGH);
+    gpio_hold_en(g);
+  }
+  freeink::PowerManager::powerDownRailsForSleep();
+  freeink::PowerManager::waitForPowerButtonRelease();
+  freeink::PowerManager::armPowerButtonWakeup();
+  esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(seconds) * 1000000ULL);
+  freeink::PowerManager::deepSleep();
+}
+
 uint16_t HalPowerManager::getBatteryPercentage() const {
   static const BatteryMonitor battery;
   if (BoardConfig::ACTIVE.batteryGauge.gaugeAddr != 0) {

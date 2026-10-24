@@ -3,6 +3,8 @@
 #include <HalStorage.h>
 #include <Logging.h>
 
+#include <cstdlib>
+
 namespace {
 constexpr size_t TAMANHO_MAXIMO = 2048;  // o arquivo é pequeno: endereço, token e meia dúzia de chaves
 
@@ -57,6 +59,10 @@ bool PainelConfig::carregar() {
       cfSecret = valor;
     } else if (chave == "descanso") {
       descanso = valor;
+    } else if (chave == "atualizar_min") {
+      atualizarMin = atoi(valor.c_str());
+      if (atualizarMin < 0) atualizarMin = 0;
+      if (atualizarMin > 0 && atualizarMin < 5) atualizarMin = 5;   // menos que isso só gasta bateria
     } else if (chave == "abrir_ao_ligar") {
       abrirAoLigar = valor == "1" || valor == "sim" || valor == "true";
     } else if (chave == "paginas") {

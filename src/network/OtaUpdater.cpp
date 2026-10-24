@@ -19,7 +19,8 @@
 #include "FirmwareFlasher.h"
 
 namespace {
-constexpr char latestReleaseUrl[] = "https://api.github.com/repos/crosspoint-reader/crosspoint-reader/releases/latest";
+// The Painel fork updates from its own releases (crosspoint-<tag>-x3-x4.bin), never from upstream.
+constexpr char latestReleaseUrl[] = "https://api.github.com/repos/oka-devs/crosspoint-painel/releases/latest";
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {

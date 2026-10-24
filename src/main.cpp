@@ -18,6 +18,7 @@
 #include <SPI.h>
 #include <VectorFontSupport.h>
 #include <WiFi.h>
+#include <esp_sleep.h>
 #include <XteinkDetect.h>
 #include <builtinFonts/all.h>
 
@@ -33,6 +34,7 @@
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "activities/painel/PainelConfig.h"
+#include "activities/painel/PainelSilencioso.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -263,6 +265,8 @@ static bool loadSleepFrameBuffer() {
 void enterDeepSleep(bool fromTimeout = false) {
   HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for sleep preparation
   APP_STATE.lastSleepFromReader = activityManager.isReaderActivity();
+  // Read while the SD is still up: with a timer the device sleeps instead of powering off.
+  const uint32_t painelTimer = painelTimerSegundos();
 
   const bool isQuickResumeSleep =
       SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::QUICK_RESUME ||
@@ -296,9 +300,13 @@ void enterDeepSleep(bool fromTimeout = false) {
   halTiltSensor.deepSleep();
   display.deepSleep();
   Storage.prepareForDeepSleep();
-  LOG_DBG("MAIN", "Entering deep sleep");
+  LOG_DBG("MAIN", "Entering deep sleep%s", painelTimer ? " (Painel timer)" : "");
 
-  powerManager.startDeepSleep(gpio);
+  if (painelTimer > 0) {
+    powerManager.startTimedDeepSleep(gpio, painelTimer);
+  } else {
+    powerManager.startDeepSleep(gpio);
+  }
 }
 
 void setupDisplayAndFonts(bool seamless = false) {
@@ -448,6 +456,16 @@ void setup() {
   const bool restoreLightOn =
       isSilentReboot ? silentRebootLightOn : (SETTINGS.frontlightOn != 0 && SETTINGS.frontlightRestoreOnWake != 0);
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
+
+  // Painel timer wake: no UI. Refresh the sleep screen (and the reading queue) and go back to sleep; the
+  // sleep path draws the new /sleep.bmp. The power button still wakes normally (GPIO cause, not timer).
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+    LOG_INF("MAIN", "Painel timer wake");
+    setupDisplayAndFonts(true);
+    painelAtualizarSilencioso();
+    enterDeepSleep();
+    return;
+  }
 
   switch (wakeupReason) {
     case HalGPIO::WakeupReason::PowerButton:

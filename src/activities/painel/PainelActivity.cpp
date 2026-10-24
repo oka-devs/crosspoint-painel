@@ -15,12 +15,10 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "PainelRede.h"
 #include "network/HttpDownloader.h"
 
 namespace {
-constexpr char DESCANSO_BMP[] = "/sleep.bmp";
-constexpr size_t COPIA_BUFFER = 2048;
-
 bool wifiConectado() { return WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0); }
 }  // namespace
 
@@ -123,9 +121,7 @@ void PainelActivity::onWifiPronto(const bool conectado) {
   requestUpdate();
 }
 
-std::string PainelActivity::caminho(const std::string& pagina) const {
-  return std::string(PainelConfig::PASTA) + "/" + pagina + ".bmp";
-}
+std::string PainelActivity::caminho(const std::string& pagina) const { return painelRede::caminhoPagina(pagina); }
 
 int PainelActivity::paginasGuardadas() const {
   int n = 0;
@@ -135,24 +131,11 @@ int PainelActivity::paginasGuardadas() const {
   return n;
 }
 
-bool PainelActivity::baixarPagina(const std::string& pagina) {
-  return baixarPara(config.url + "/xteink/tela?pagina=" + pagina + "&formato=bmp", pagina);
-}
-
-HttpDownloader::Headers PainelActivity::cabecalhos() const {
-  HttpDownloader::Headers headers = {{"Authorization", "Bearer " + config.token}};
-  if (!config.cfId.empty() && !config.cfSecret.empty()) {
-    headers.emplace_back("CF-Access-Client-Id", config.cfId);
-    headers.emplace_back("CF-Access-Client-Secret", config.cfSecret);
-  }
-  return headers;
-}
-
 // GET /xteink/paginas e colhe os "id" na ordem; o JSON é pequeno (< 300 bytes) e plano, então uma
 // varredura de texto basta e dispensa um parser.
 bool PainelActivity::lerCatalogo() {
   std::string corpo;
-  if (!HttpDownloader::fetchUrl(config.url + "/xteink/paginas", corpo, cabecalhos())) return false;
+  if (!HttpDownloader::fetchUrl(config.url + "/xteink/paginas", corpo, painelRede::cabecalhos(config))) return false;
   std::vector<std::string> ids;
   ids.reserve(6);
   size_t pos = 0;
@@ -169,24 +152,6 @@ bool PainelActivity::lerCatalogo() {
   return true;
 }
 
-bool PainelActivity::baixarPara(const std::string& url, const std::string& pagina) {
-  const std::string destino = caminho(pagina);
-  const std::string temporario = destino + ".tmp";
-  const HttpDownloader::Headers headers = cabecalhos();
-  // Baixa num .tmp para a página anterior sobreviver a uma queda de rede no meio.
-  const auto resultado = HttpDownloader::downloadToFile(url, temporario, headers);
-  if (resultado != HttpDownloader::OK) {
-    LOG_ERR("PNL", "falhou %s (%d)", pagina.c_str(), static_cast<int>(resultado));
-    return false;
-  }
-  if (Storage.exists(destino.c_str())) Storage.remove(destino.c_str());
-  if (!Storage.rename(temporario.c_str(), destino.c_str())) {
-    LOG_ERR("PNL", "nao renomeou %s", temporario.c_str());
-    return false;
-  }
-  return true;
-}
-
 void PainelActivity::baixarAgora() {
   LOG_DBG("PNL", "heap antes: %u livre, %u maior bloco", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   int ok = 0;
@@ -198,10 +163,13 @@ void PainelActivity::baixarAgora() {
       LOG_ERR("PNL", "sem catalogo do servidor; tentando o que ha no cartao");
     }
     for (const auto& pagina : config.paginas) {
-      if (baixarPagina(pagina)) ++ok;
+      if (painelRede::baixarPagina(config, pagina)) ++ok;
     }
   }
-  if (ok > 0) copiarDescanso();
+  if (ok > 0) {
+    painelRede::copiarDescanso(config);
+    leiturasNovas = painelRede::baixarLeituras(config);
+  }
   if (paginasGuardadas() > 0) {
     state = PainelState::MOSTRANDO;
     if (paginaAtual >= static_cast<int>(config.paginas.size())) paginaAtual = 0;
@@ -213,44 +181,6 @@ void PainelActivity::baixarAgora() {
           ESP.getFreeHeap());
 }
 
-void PainelActivity::copiarDescanso() const {
-  if (config.descanso.empty()) return;
-  const std::string origem = caminho(config.descanso);
-  if (!Storage.exists(origem.c_str())) return;
-  auto buffer = makeUniqueNoThrow<uint8_t[]>(COPIA_BUFFER);
-  if (!buffer) {
-    LOG_ERR("PNL", "OOM: buffer de copia do descanso");
-    return;
-  }
-  HalFile entrada, saida;
-  if (!Storage.openFileForRead("PNL", origem, entrada)) return;
-  if (!Storage.openFileForWrite("PNL", DESCANSO_BMP, saida)) {
-    entrada.close();
-    return;
-  }
-  bool sucesso = true;
-  int lidos;
-  while ((lidos = entrada.read(buffer.get(), COPIA_BUFFER)) > 0) {
-    if (saida.write(buffer.get(), static_cast<size_t>(lidos)) != static_cast<size_t>(lidos)) {
-      sucesso = false;
-      break;
-    }
-  }
-  if (lidos < 0) sucesso = false;
-  saida.close();
-  entrada.close();
-  if (!sucesso) {
-    LOG_ERR("PNL", "copia do descanso falhou");
-    return;
-  }
-  // O /sleep.bmp só aparece nos modos que o leem; sem mexer em quem já escolheu "capa + custom".
-  if (SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM &&
-      SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::COVER_CUSTOM) {
-    SETTINGS.sleepScreen = CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM;
-    SETTINGS.saveToFile();
-  }
-}
-
 void PainelActivity::acao(const char* tecla) {
   if (!wifiConectado()) {
     conectar();  // a rede caiu: volta a conectar e a baixar tudo; a ação fica para a próxima tecla
@@ -258,12 +188,13 @@ void PainelActivity::acao(const char* tecla) {
   }
   const std::string& pagina = config.paginas[paginaAtual];
   GUI.drawPopup(renderer, tr(STR_PAINEL_ENVIANDO));
-  const bool ok = baixarPara(config.url + "/xteink/acao?pagina=" + pagina + "&tecla=" + tecla + "&formato=bmp", pagina);
+  const bool ok = painelRede::baixarPara(
+      config, config.url + "/xteink/acao?pagina=" + pagina + "&tecla=" + tecla + "&formato=bmp", pagina);
   if (!ok) {
     GUI.drawPopup(renderer, tr(STR_PAINEL_ACAO_FALHOU));
     delay(1200);
   } else if (pagina == config.descanso) {
-    copiarDescanso();
+    painelRede::copiarDescanso(config);
   }
   requestUpdate();
 }
@@ -353,6 +284,12 @@ void PainelActivity::render(RenderLock&&) {
       }
       // HALF: um passe limpo por página, sem o pisca do refresh completo (como a tela de descanso).
       renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+      if (leiturasNovas > 0) {
+        char aviso[48];
+        snprintf(aviso, sizeof(aviso), "%d %s", leiturasNovas, tr(STR_PAINEL_LEITURAS_NOVAS));
+        GUI.drawPopup(renderer, aviso);
+        leiturasNovas = 0;
+      }
       return;
   }
 }

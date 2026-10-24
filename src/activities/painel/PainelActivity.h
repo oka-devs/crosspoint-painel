@@ -44,18 +44,15 @@ class PainelActivity final : public Activity {
   bool baixarPendente = false;
   bool wifiLigadoAqui = false;
   std::string erro;
+  int leiturasNovas = 0;
 
   void conectar();
   void onWifiPronto(bool conectado);
   void baixarAgora();
-  bool baixarPagina(const std::string& pagina);
   bool lerCatalogo();
-  HttpDownloader::Headers cabecalhos() const;
   void acao(const char* tecla);
-  bool baixarPara(const std::string& url, const std::string& pagina);
   int paginasGuardadas() const;
   std::string caminho(const std::string& pagina) const;
-  void copiarDescanso() const;
   void mudarPagina(int delta);
   void renderMensagem(const char* titulo, const char* detalhe) const;
   bool renderPagina() const;
