@@ -79,16 +79,23 @@ void PainelActivity::loop() {
     conectar();
     return;
   }
-  if (mappedInput.wasReleased(MappedInputManager::Button::Left) ||
-      mappedInput.wasReleased(MappedInputManager::Button::Up) ||
-      mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Left)) {
     mudarPagina(-1);
     return;
   }
-  if (mappedInput.wasReleased(MappedInputManager::Button::Right) ||
-      mappedInput.wasReleased(MappedInputManager::Button::Down) ||
-      mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Right)) {
     mudarPagina(+1);
+    return;
+  }
+  // As teclas laterais são as ações: o servidor desenhou no rodapé o que cada uma faz nesta página.
+  if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
+      mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
+    acao("cima");
+    return;
+  }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Down) ||
+      mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
+    acao("baixo");
   }
 }
 
@@ -129,7 +136,10 @@ int PainelActivity::paginasGuardadas() const {
 }
 
 bool PainelActivity::baixarPagina(const std::string& pagina) {
-  const std::string url = config.url + "/xteink/tela?pagina=" + pagina + "&formato=bmp";
+  return baixarPara(config.url + "/xteink/tela?pagina=" + pagina + "&formato=bmp", pagina);
+}
+
+bool PainelActivity::baixarPara(const std::string& url, const std::string& pagina) {
   const std::string destino = caminho(pagina);
   const std::string temporario = destino + ".tmp";
   HttpDownloader::Headers headers = {{"Authorization", "Bearer " + config.token}};
@@ -210,6 +220,23 @@ void PainelActivity::copiarDescanso() const {
     SETTINGS.sleepScreen = CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM;
     SETTINGS.saveToFile();
   }
+}
+
+void PainelActivity::acao(const char* tecla) {
+  if (!wifiConectado()) {
+    conectar();  // a rede caiu: volta a conectar e a baixar tudo; a ação fica para a próxima tecla
+    return;
+  }
+  const std::string& pagina = config.paginas[paginaAtual];
+  GUI.drawPopup(renderer, tr(STR_PAINEL_ENVIANDO));
+  const bool ok = baixarPara(config.url + "/xteink/acao?pagina=" + pagina + "&tecla=" + tecla + "&formato=bmp", pagina);
+  if (!ok) {
+    GUI.drawPopup(renderer, tr(STR_PAINEL_ACAO_FALHOU));
+    delay(1200);
+  } else if (pagina == config.descanso) {
+    copiarDescanso();
+  }
+  requestUpdate();
 }
 
 // ---------- navegação ----------

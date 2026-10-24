@@ -17,6 +17,8 @@ enum class PainelState {
  * Painel: as telas que o AkiraOS desenha (GET /xteink/tela, BMP de 1 bit em 480×800) mostradas no
  * aparelho. Ao entrar, conecta no Wi-Fi salvo, baixa cada página para /.painel/<pagina>.bmp e mostra a
  * primeira. As setas trocam de página (já no cartão, sem rede); Confirmar baixa tudo de novo; Voltar sai.
+ * As teclas laterais (cima/baixo) mandam a ação que o servidor desenhou no rodapé da página
+ * (GET /xteink/acao), que responde com a página já redesenhada.
  * A página de descanso (config `descanso`) é copiada para /sleep.bmp, então a tela de dormir mostra o
  * painel sem o firmware precisar de nada mais.
  *
@@ -46,6 +48,8 @@ class PainelActivity final : public Activity {
   void onWifiPronto(bool conectado);
   void baixarAgora();
   bool baixarPagina(const std::string& pagina);
+  void acao(const char* tecla);
+  bool baixarPara(const std::string& url, const std::string& pagina);
   int paginasGuardadas() const;
   std::string caminho(const std::string& pagina) const;
   void copiarDescanso() const;
