@@ -14,6 +14,10 @@ namespace painelRede {
 // Cabeçalhos de toda chamada ao servidor: o token do aparelho e, se houver, o token de serviço do Access.
 HttpDownloader::Headers cabecalhos(const PainelConfig& config);
 
+// O valor texto da chave JSON `"chave":"valor"` a partir de `pos`, em `out`. Devolve a posição logo depois do
+// valor, ou npos quando a chave não aparece (varredura de texto: os JSONs do servidor são pequenos e planos).
+size_t valorTexto(const std::string& json, const char* chave, size_t pos, std::string& out);
+
 // /.painel/<pagina>.bmp
 std::string caminhoPagina(const std::string& pagina);
 

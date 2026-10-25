@@ -16,20 +16,6 @@ constexpr char PASTA_LEITURAS[] = "/Leituras";
 constexpr size_t COPIA_BUFFER = 2048;
 constexpr int MAX_LEITURAS_POR_VEZ = 5;
 
-// Valor da chave JSON `"chave":"valor"` a partir de `pos`; devolve npos quando não há.
-size_t valorTexto(const std::string& json, const char* chave, size_t pos, std::string& out) {
-  const std::string marca = std::string("\"") + chave + "\":";
-  pos = json.find(marca, pos);
-  if (pos == std::string::npos) return pos;
-  pos += marca.size();
-  while (pos < json.size() && json[pos] == ' ') ++pos;
-  if (pos >= json.size() || json[pos] != '"') return std::string::npos;
-  const auto fim = json.find('"', pos + 1);
-  if (fim == std::string::npos) return fim;
-  out = json.substr(pos + 1, fim - pos - 1);
-  return fim + 1;
-}
-
 size_t valorNumero(const std::string& json, const char* chave, size_t pos, long& out) {
   const std::string marca = std::string("\"") + chave + "\":";
   pos = json.find(marca, pos);
@@ -42,6 +28,19 @@ size_t valorNumero(const std::string& json, const char* chave, size_t pos, long&
 }  // namespace
 
 namespace painelRede {
+
+size_t valorTexto(const std::string& json, const char* chave, size_t pos, std::string& out) {
+  const std::string marca = std::string("\"") + chave + "\":";
+  pos = json.find(marca, pos);
+  if (pos == std::string::npos) return pos;
+  pos += marca.size();
+  while (pos < json.size() && json[pos] == ' ') ++pos;
+  if (pos >= json.size() || json[pos] != '"') return std::string::npos;
+  const auto fim = json.find('"', pos + 1);
+  if (fim == std::string::npos) return fim;
+  out = json.substr(pos + 1, fim - pos - 1);
+  return fim + 1;
+}
 
 HttpDownloader::Headers cabecalhos(const PainelConfig& config) {
   HttpDownloader::Headers headers = {{"Authorization", "Bearer " + config.token}};

@@ -8,6 +8,7 @@
 #include <Memory.h>
 #include <WiFi.h>
 
+#include <cctype>
 #include <cmath>
 
 #include "CrossPointSettings.h"
@@ -38,6 +39,8 @@ void PainelActivity::onEnter() {
     requestUpdate();
     return;
   }
+  paginasFixas = !config.paginasDoServidor();
+  rotulosPadrao();
   Storage.ensureDirectoryExists(PainelConfig::PASTA);
   conectar();
 }
@@ -131,23 +134,50 @@ int PainelActivity::paginasGuardadas() const {
   return n;
 }
 
-// GET /xteink/paginas e colhe os "id" na ordem; o JSON é pequeno (< 300 bytes) e plano, então uma
-// varredura de texto basta e dispensa um parser.
+// Sem catálogo (ou página fora dele): o nome é o id com a inicial maiúscula e as teclas laterais sem dica.
+void PainelActivity::rotulosPadrao() {
+  rotulos.assign(config.paginas.size(), PainelRotulos{});
+  for (size_t i = 0; i < config.paginas.size(); ++i) {
+    rotulos[i].nome = config.paginas[i];
+    if (!rotulos[i].nome.empty()) {
+      rotulos[i].nome[0] = static_cast<char>(toupper(static_cast<unsigned char>(rotulos[i].nome[0])));
+    }
+  }
+}
+
+// GET /xteink/paginas: cada item é {"id","nome","cima","baixo"}, na ordem do servidor. O JSON é pequeno
+// (< 400 bytes) e plano, então uma varredura de texto basta e dispensa um parser. Sem `paginas=` no cartão a
+// lista vem daqui; com ela, o catálogo só dá nome e rótulos às páginas que o cartão pediu.
 bool PainelActivity::lerCatalogo() {
   std::string corpo;
   if (!HttpDownloader::fetchUrl(config.url + "/xteink/paginas", corpo, painelRede::cabecalhos(config))) return false;
   std::vector<std::string> ids;
-  ids.reserve(6);
+  std::vector<PainelRotulos> lidos;
+  std::string id;
   size_t pos = 0;
-  while ((pos = corpo.find("\"id\":\"", pos)) != std::string::npos) {
-    pos += 6;
-    const auto fim = corpo.find('"', pos);
+  while ((pos = painelRede::valorTexto(corpo, "id", pos, id)) != std::string::npos) {
+    const size_t fim = corpo.find('}', pos);
+    const std::string item = corpo.substr(pos, fim == std::string::npos ? std::string::npos : fim - pos);
+    PainelRotulos r;
+    if (painelRede::valorTexto(item, "nome", 0, r.nome) == std::string::npos) r.nome = id;
+    painelRede::valorTexto(item, "cima", 0, r.cima);
+    painelRede::valorTexto(item, "baixo", 0, r.baixo);
+    ids.push_back(id);
+    lidos.push_back(std::move(r));
     if (fim == std::string::npos) break;
-    ids.push_back(corpo.substr(pos, fim - pos));
-    pos = fim + 1;
+    pos = fim;
   }
   if (ids.empty()) return false;
-  config.paginas = std::move(ids);
+  if (paginasFixas) {
+    for (size_t i = 0; i < config.paginas.size(); ++i) {
+      for (size_t j = 0; j < ids.size(); ++j) {
+        if (ids[j] == config.paginas[i]) rotulos[i] = lidos[j];
+      }
+    }
+  } else {
+    config.paginas = std::move(ids);
+    rotulos = std::move(lidos);
+  }
   LOG_DBG("PNL", "catalogo: %u paginas", static_cast<unsigned>(config.paginas.size()));
   return true;
 }
@@ -159,7 +189,7 @@ void PainelActivity::baixarAgora() {
       ESP.getMaxAllocHeap() < HttpDownloader::MIN_TLS_MAX_ALLOC) {
     LOG_ERR("PNL", "heap baixo para TLS (%u livre, %u maior bloco)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   } else {
-    if (config.paginasDoServidor() && !lerCatalogo()) {
+    if (!lerCatalogo() && !paginasFixas) {
       LOG_ERR("PNL", "sem catalogo do servidor; tentando o que ha no cartao");
     }
     for (const auto& pagina : config.paginas) {
@@ -227,6 +257,26 @@ void PainelActivity::renderMensagem(const char* titulo, const char* detalhe) con
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 }
 
+// As dicas dos botões por cima da página, como nas outras telas: embaixo, Voltar, Atualizar e as setas com
+// o nome da página vizinha (a lista dá a volta); na borda direita, o que as teclas laterais fazem aqui. O
+// servidor deixa essas faixas em branco (os 40 px de baixo e a borda direita entre y 345 e 505).
+void PainelActivity::desenharDicas() const {
+  const int total = static_cast<int>(config.paginas.size());
+  const auto nomeDe = [this](const int i) -> const std::string& {
+    return i < static_cast<int>(rotulos.size()) && !rotulos[i].nome.empty() ? rotulos[i].nome : config.paginas[i];
+  };
+  std::string anterior, seguinte;
+  if (total > 1) {
+    anterior = "« " + nomeDe((paginaAtual + total - 1) % total);
+    seguinte = nomeDe((paginaAtual + 1) % total) + " »";
+  }
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_UPDATE), anterior.c_str(), seguinte.c_str());
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  if (paginaAtual < static_cast<int>(rotulos.size())) {
+    GUI.drawSideButtonHints(renderer, rotulos[paginaAtual].cima.c_str(), rotulos[paginaAtual].baixo.c_str());
+  }
+}
+
 bool PainelActivity::renderPagina() const {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
@@ -279,7 +329,9 @@ void PainelActivity::render(RenderLock&&) {
       renderer.displayBuffer(HalDisplay::HALF_REFRESH);
       return;
     case PainelState::MOSTRANDO:
-      if (!renderPagina()) {
+      if (renderPagina()) {
+        desenharDicas();
+      } else {
         renderMensagem(tr(STR_PAINEL_ERRO), tr(STR_FILE_OPEN_FAILED));
       }
       // HALF: um passe limpo por página, sem o pisca do refresh completo (como a tela de descanso).
