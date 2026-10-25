@@ -88,15 +88,16 @@ void PainelActivity::loop() {
     mudarPagina(+1);
     return;
   }
-  // As teclas laterais são as ações: o servidor desenhou no rodapé o que cada uma faz nesta página.
+  // As teclas laterais são as ações da página; sem rótulo no catálogo a tecla não faz nada aqui.
+  const bool temRotulos = paginaAtual < static_cast<int>(rotulos.size());
   if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
       mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
-    acao("cima");
+    if (temRotulos && !rotulos[paginaAtual].cima.empty()) acao("cima");
     return;
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Down) ||
       mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
-    acao("baixo");
+    if (temRotulos && !rotulos[paginaAtual].baixo.empty()) acao("baixo");
   }
 }
 
@@ -189,6 +190,7 @@ void PainelActivity::baixarAgora() {
       ESP.getMaxAllocHeap() < HttpDownloader::MIN_TLS_MAX_ALLOC) {
     LOG_ERR("PNL", "heap baixo para TLS (%u livre, %u maior bloco)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   } else {
+    painelRede::acertarRelogio();  // só quando a hora ainda não vale (boot frio); a janela de silêncio precisa dela
     if (!lerCatalogo() && !paginasFixas) {
       LOG_ERR("PNL", "sem catalogo do servidor; tentando o que ha no cartao");
     }

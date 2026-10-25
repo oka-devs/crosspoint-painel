@@ -16,6 +16,9 @@
  *   abrir_ao_ligar=1                     (ligar o aparelho já abre o Painel em vez da tela inicial)
  *   atualizar_min=30                     (dormir segurando a bateria e acordar a cada N min para renovar
  *                                         o descanso e baixar leituras; 0 = desligar de verdade, o padrão)
+ *   silencio=2-7                         (com o timer: não acordar entre essas horas, na hora local do
+ *                                         CrossPoint (Configurações › Relógio › Fuso horário); pode cruzar a
+ *                                         meia-noite, "23-6"; sem a linha, acorda a noite inteira)
  *
  * O arquivo fica no cartão, fora do firmware, para trocar servidor ou token sem reflashear.
  */
@@ -28,6 +31,8 @@ struct PainelConfig {
   std::string descanso = "hoje";
   bool abrirAoLigar = false;
   int atualizarMin = 0;
+  int silencioDe = -1;   // hora (0-23) em que o silêncio começa; -1 = sem janela
+  int silencioAte = -1;  // hora em que termina (exclusiva)
 
   static constexpr const char* ARQUIVO = "/painel.txt";
   static constexpr const char* PASTA = "/.painel";
@@ -36,6 +41,7 @@ struct PainelConfig {
   bool carregar();
   bool valida() const { return !url.empty() && !token.empty(); }
   bool paginasDoServidor() const { return paginas.empty(); }
+  bool temSilencio() const { return silencioDe >= 0 && silencioAte >= 0 && silencioDe != silencioAte; }
 
   // Só a pergunta do boot, sem guardar o resto.
   static bool abrirAoLigarConfigurado();

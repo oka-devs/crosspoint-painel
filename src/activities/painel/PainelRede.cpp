@@ -4,7 +4,9 @@
 #include <Logging.h>
 #include <Memory.h>
 #include <WiFi.h>
+#include <esp_sntp.h>
 
+#include <ctime>
 #include <vector>
 
 #include "CrossPointSettings.h"
@@ -15,6 +17,7 @@ constexpr char DESCANSO_BMP[] = "/sleep.bmp";
 constexpr char PASTA_LEITURAS[] = "/Leituras";
 constexpr size_t COPIA_BUFFER = 2048;
 constexpr int MAX_LEITURAS_POR_VEZ = 5;
+constexpr time_t RELOGIO_MINIMO = 1700000000;  // nov/2023: qualquer hora antes disso é o 1970 do boot frio
 
 size_t valorNumero(const std::string& json, const char* chave, size_t pos, long& out) {
   const std::string marca = std::string("\"") + chave + "\":";
@@ -173,6 +176,27 @@ bool conectarSalvo(const unsigned long timeoutMs) {
   }
   LOG_INF("PNL", "conectado em %s", ssid.c_str());
   return true;
+}
+
+bool relogioValido() { return time(nullptr) > RELOGIO_MINIMO; }
+
+bool acertarRelogio(const bool forcar) {
+  if (!forcar && relogioValido()) return true;
+  if (WiFi.status() != WL_CONNECTED) return false;
+  const char* tz = getenv("TZ");
+  configTzTime(tz && tz[0] ? tz : "UTC0", "pool.ntp.org", "time.nist.gov");
+  for (int i = 0; i < 40; ++i) {
+    if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
+      struct tm local;
+      const time_t agora = time(nullptr);
+      localtime_r(&agora, &local);
+      LOG_INF("PNL", "relogio acertado: %02d:%02d local", local.tm_hour, local.tm_min);
+      return true;
+    }
+    delay(100);
+  }
+  LOG_ERR("PNL", "SNTP nao respondeu");
+  return relogioValido();
 }
 
 }  // namespace painelRede

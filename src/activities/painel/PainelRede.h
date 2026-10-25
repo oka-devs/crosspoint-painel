@@ -37,4 +37,14 @@ int baixarLeituras(const PainelConfig& config);
 // Conecta no último Wi-Fi salvo sem interface, esperando até `timeoutMs`. Usa o WifiCredentialStore.
 bool conectarSalvo(unsigned long timeoutMs = 20000);
 
+// O relógio do sistema já foi acertado alguma vez desde o último boot frio? (Começa em 1970; o deep sleep
+// por timer preserva a hora, o desligamento de verdade não.)
+bool relogioValido();
+
+// Acerta o relógio do sistema por SNTP, com o fuso que o CrossPoint já pôs em TZ. O X4 não tem RTC e o
+// CrossPoint só sincroniza quando o usuário pede, então o Painel faz isso quando está na rede: sempre que
+// o relógio ainda não vale, ou também quando `forcar` (o oscilador do deep sleep deriva alguns minutos por
+// noite). Espera até 4 s; precisa do Wi-Fi conectado.
+bool acertarRelogio(bool forcar = false);
+
 }  // namespace painelRede

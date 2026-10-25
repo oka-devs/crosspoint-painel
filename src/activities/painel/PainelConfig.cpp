@@ -63,6 +63,18 @@ bool PainelConfig::carregar() {
       atualizarMin = atoi(valor.c_str());
       if (atualizarMin < 0) atualizarMin = 0;
       if (atualizarMin > 0 && atualizarMin < 5) atualizarMin = 5;   // menos que isso só gasta bateria
+    } else if (chave == "silencio") {
+      const auto traco = valor.find('-');
+      if (traco != std::string::npos) {
+        const int de = atoi(valor.substr(0, traco).c_str());
+        const int ate = atoi(valor.substr(traco + 1).c_str());
+        if (de >= 0 && de <= 23 && ate >= 0 && ate <= 23 && de != ate) {
+          silencioDe = de;
+          silencioAte = ate;
+        } else {
+          LOG_ERR("PNL", "silencio=%s ignorado (use horas de 0 a 23, ex. 2-7)", valor.c_str());
+        }
+      }
     } else if (chave == "abrir_ao_ligar") {
       abrirAoLigar = valor == "1" || valor == "sim" || valor == "true";
     } else if (chave == "paginas") {
