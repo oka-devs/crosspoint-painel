@@ -18,6 +18,9 @@ HttpDownloader::Headers cabecalhos(const PainelConfig& config);
 // valor, ou npos quando a chave não aparece (varredura de texto: os JSONs do servidor são pequenos e planos).
 size_t valorTexto(const std::string& json, const char* chave, size_t pos, std::string& out);
 
+// "&bateria=N" com a carga atual, para o servidor desenhar no cabeçalho da página.
+std::string sufixoBateria();
+
 // /.painel/<pagina>.bmp
 std::string caminhoPagina(const std::string& pagina);
 

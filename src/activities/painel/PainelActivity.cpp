@@ -221,7 +221,8 @@ void PainelActivity::acao(const char* tecla) {
   const std::string& pagina = config.paginas[paginaAtual];
   GUI.drawPopup(renderer, tr(STR_PAINEL_ENVIANDO));
   const bool ok = painelRede::baixarPara(
-      config, config.url + "/xteink/acao?pagina=" + pagina + "&tecla=" + tecla + "&formato=bmp", pagina);
+      config, config.url + "/xteink/acao?pagina=" + pagina + "&tecla=" + tecla + "&formato=bmp" + painelRede::sufixoBateria(),
+      pagina);
   if (!ok) {
     GUI.drawPopup(renderer, tr(STR_PAINEL_ACAO_FALHOU));
     delay(1200);

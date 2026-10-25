@@ -1,5 +1,6 @@
 #include "PainelRede.h"
 
+#include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Memory.h>
@@ -54,6 +55,8 @@ HttpDownloader::Headers cabecalhos(const PainelConfig& config) {
   return headers;
 }
 
+std::string sufixoBateria() { return "&bateria=" + std::to_string(powerManager.getBatteryPercentage()); }
+
 std::string caminhoPagina(const std::string& pagina) {
   return std::string(PainelConfig::PASTA) + "/" + pagina + ".bmp";
 }
@@ -75,7 +78,7 @@ bool baixarPara(const PainelConfig& config, const std::string& url, const std::s
 }
 
 bool baixarPagina(const PainelConfig& config, const std::string& pagina) {
-  return baixarPara(config, config.url + "/xteink/tela?pagina=" + pagina + "&formato=bmp", pagina);
+  return baixarPara(config, config.url + "/xteink/tela?pagina=" + pagina + "&formato=bmp" + sufixoBateria(), pagina);
 }
 
 void copiarDescanso(const PainelConfig& config) {
